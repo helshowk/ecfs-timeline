@@ -1,0 +1,214 @@
+<!DOCTYPE html>
+<html>
+    <head>
+        <link rel="stylesheet" type="text/css" href="https://cdn.knightlab.com/libs/timeline3/latest/css/timeline.css">
+        <link rel="stylesheet" href="https://maxcdn.bootstrapcdn.com/bootstrap/3.3.5/css/bootstrap.min.css">
+        <script type="text/javascript" src="http://ajax.googleapis.com/ajax/libs/jquery/1.7.2/jquery.min.js"></script>
+        <script type="text/javascript" src="http://cdn.knightlab.com/libs/timeline3/latest/js/timeline.js"></script>
+        <script type="text/javascript" src="js/maketimeline.js"></script>
+        <style>
+            #timeline {
+                height: 450px;
+                width: 100%;
+                margin-right: auto;
+                margin-left: auto;
+                border: 1px solid;
+            }
+            
+            body {
+                margin-top: 50px;
+            }
+            
+            .facet-box {
+                border: 1px solid #cccccc;
+                margin-bottom: 7%;
+            }
+            
+            .facet-header { 
+                text-align: center;
+                border-bottom: 1px solid #cccccc;
+                padding: 3px;
+                background: white;
+                color: white;
+                font-weight: bold;
+                text-transform: uppercase;
+                background: #A52A2A;
+            }
+            
+            .facet-data {
+                max-height: 200px;
+                overflow-y: scroll;
+                padding: 3%;
+                padding-bottom: 50%;
+            }
+            
+            .facet-entry {
+                cursor: pointer;
+            }
+            
+            .container {
+                width: 95%;
+            }
+        </style>
+    </head>
+    <body>
+        <div class="container">
+            <h1 style="margin-bottom: 4%;">ECFS Filings Timeline</h1>
+            <div class="row">
+                <div class="col-sm-3">
+                    <div id="facets">
+                    </div>
+                </div>
+                <div class="col-sm-9">
+                    <div id="timeline"></div>
+                </div>
+            </div>
+        </div>
+        <script type="text/javascript" src="ecfs.json.js"></script>
+        <script>
+            var sub_data = [ ];
+            var selected_facets = {"type_of_filing": [ ], "name_of_filer": [ ]};
+            
+            $(document).ready(function() {
+                for(var i=0; i < json_data['results'].length; i++) {
+                    json_data['results'][i]['event_text'] = "<p>" + json_data['results'][i]['type_of_filing'] + "</p>" + "<a href='" + json_data['results'][i]['fcc_url'] + "'>Filing Link</a>";
+                }
+                sub_data = json_data['results'];
+                updateTimeline();
+                buildFacets();
+            });
+            
+            function createFacet(name, field, elements) {
+                var elem = "<div class='facet-box'>\n";
+                elem += "<div class='facet-header'>" + name + "</div>\n";
+                elem += "<div class='facet-data'>";
+                elem += "<ul class='list-unstyled'>\n";
+                
+                var sort_keys = new Array();
+                for(var key in elements) {
+                    sort_keys.push([key, elements[key]]);
+                }
+                sort_keys.sort(function(a,b) { return b[1] - a[1]; });
+                
+                for(var i=0; i < sort_keys.length; i++) {
+                    var key = sort_keys[i][0];
+                    var cnt = sort_keys[i][1];
+                    
+                    if (selected_facets[field].indexOf(key) == -1) {
+                        elem += '<li><input type="checkbox" class="facet-entry" data-facet-field="' + field + '" value="' + key.replace(/"/g, '\"') + '">    ' + key + ' (' + cnt + ')</li>';
+                    } else {
+                        elem += '<li><input type="checkbox" class="facet-entry" checked data-facet-field="' + field + '" value="' + key.replace(/"/g, '\"') + '">    ' + key + ' (' + cnt + ')</li>';
+                    }
+                }
+                elem += "</ul></div>";
+                return elem;
+            }
+            
+            function buildFacets() {
+                var facet_fields = { "type_of_filing": "Filing Type", "name_of_filer": "Filer" };
+                $('#facets').empty();
+                for(var field in facet_fields) {
+                    var temp = getFacets(sub_data, field);
+                    var facets = createFacet(facet_fields[field], field, temp);
+                    $('#facets').append(facets);
+                }
+                
+                $('.facet-entry').on('click', function() {
+                    var facet_field = $(this).attr('data-facet-field');
+                    var field_value = $(this).val();
+                    if ($(this).prop('checked')) {
+                        selected_facets[facet_field].push(field_value);
+                    } else {
+                        var idx = selected_facets[facet_field].indexOf(field_value);
+                        if (idx != -1) {
+                            selected_facets[facet_field].splice(idx, 1);
+                        }
+                    }
+                    
+                    var facets_cnt = 0;
+                    for(var field in selected_facets) {
+                        if (selected_facets[field].length > 0) {
+                            var temp = filterData(json_data['results'], field, selected_facets[field]);
+                            facets_cnt += selected_facets[field].length;
+                            if ((facets_cnt == selected_facets[field].length) && (temp.length != 0)) {
+                                sub_data = temp;
+                            } else {
+                                // this isn't best performance and depends on having an 'id' field
+                                var new_ids = new Array();
+                                for (var i=0; i < temp.length; i++) {
+                                    new_ids.push(temp[i]['id']);
+                                }
+                                // this can be made faster, cache this for next time?
+                                var old_ids = new Array();
+                                for(var i=0; i < sub_data.length; i++) {
+                                    old_ids.push(sub_data[i]['id']);
+                                }
+                                var intersect_ids = new Array();
+                                for(var i=0; i < new_ids.length; i++) {
+                                    var oidx = old_ids.indexOf(new_ids[i]);
+                                    if (oidx != -1) {
+                                        intersect_ids.push(new_ids[i]);
+                                    }
+                                }
+                                sub_data = [ ];
+                                for(var i=0; i < json_data['results'].length; i++) {
+                                    if (intersect_ids.indexOf(json_data['results'][i]['id']) != -1) {
+                                        sub_data.push(json_data['results'][i]);
+                                    }
+                                }
+                            }
+                        }
+                    }
+                    if (facets_cnt == 0) {
+                        // special case no facets so reset to original
+                        sub_data = json_data['results'];
+                    }
+                    buildFacets();
+                    updateTimeline();
+                });
+            }
+            
+            function getFacets(object_array, field) {
+                // returns an object of unique field values from an object array along with their counts:
+                // e.g. returns { 'value1': 10, 'value2': 5, ... }
+                var unique_elements = {};
+                for(var i=0; i < object_array.length; i++) {
+                    //if (unique_elements.indexOf(object_array[i][field]) == -1) {
+                    if (unique_elements.hasOwnProperty(object_array[i][field])) {
+                        unique_elements[object_array[i][field]] += 1;
+                    } else {
+                        unique_elements[object_array[i][field]] = 1;
+                    }
+                }
+                return unique_elements;
+            }
+            
+            function filterData(object_array, field, values) {
+                // returns an array of objects from the object array which match the filter value(s) (this can be extended later to include other comparison operators)
+                var new_array = new Array();
+                for(var i=0; i < object_array.length; i++) {
+                    if (object_array[i].hasOwnProperty(field)) {
+                        for(var j=0; j < values.length; j++) {
+                            if (object_array[i][field] == values[j]) {
+                                new_array.push(object_array[i]);
+                            }
+                        }
+                    }
+                }
+                return new_array;
+            }
+            
+            function updateTimeline() {
+                var opt = {
+                    'dateField': 'date_received',
+                    'headField': 'name_of_filer',
+                    'eventField': 'event_text',
+                    'target': 'timeline',
+                    'duration': 100,
+                    'scale_factor': 1
+                };
+                drawTimeline(sub_data, opt);
+            };
+        </script>
+    </body>
+</html>
