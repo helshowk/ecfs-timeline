@@ -12,7 +12,6 @@
                 width: 100%;
                 margin-right: auto;
                 margin-left: auto;
-                border: 1px solid;
             }
             
             body {
@@ -53,14 +52,23 @@
     </head>
     <body>
         <div class="container">
-            <h1 style="margin-bottom: 4%;">ECFS Filings Timeline</h1>
+            <h1 style="margin-bottom: 2%;">ECFS Filings Timeline</h1>
+            <div class="row">
+                <div class="col-sm-6">
+                    <form id="search" class="form-inline">
+                        <input type="text" class="form-control" placeholder="" id="query_text" style="width: 75%;">
+                        <button type="submit" class="btn btn-success">Search</button>
+                    </form>
+                </div>
+            </div>
+            <hr>
             <div class="row">
                 <div class="col-sm-3">
                     <div id="facets">
                     </div>
                 </div>
                 <div class="col-sm-9">
-                    <div id="timeline"></div>
+                    <div id="timeline"s></div>
                 </div>
             </div>
         </div>
@@ -70,13 +78,30 @@
             var selected_facets = {"type_of_filing": [ ], "name_of_filer": [ ]};
             
             $(document).ready(function() {
+                $('#search').on('submit', function(e) {
+                    if (e.preventDefault) e.preventDefault();
+                    getJSON($('#query_text').val());
+                    return false;
+                });
+            });
+            
+            function init() {
                 for(var i=0; i < json_data['results'].length; i++) {
                     json_data['results'][i]['event_text'] = "<p>" + json_data['results'][i]['type_of_filing'] + "</p>" + "<a href='" + json_data['results'][i]['fcc_url'] + "'>Filing Link</a>";
                 }
                 sub_data = json_data['results'];
                 updateTimeline();
                 buildFacets();
-            });
+            }
+            
+            function getJSON(query) {
+                $.post('./php/get_json.php', { q: query }, function(data) {
+                    if (data) {
+                        json_data = JSON.parse(data);
+                        init();
+                    }
+                });
+            }
             
             function createFacet(name, field, elements) {
                 var elem = "<div class='facet-box'>\n";
